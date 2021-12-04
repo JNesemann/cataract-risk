@@ -436,6 +436,25 @@ data.eye <- data %>%
          bcva.n=as.numeric(bcva.n))
 data.eye
 
+#### calculating power ####
+library(pwr)
+
+# baseline analysis
+data %>% 
+  group_by(fuel.bin.f) %>%
+  summarise(n=sum(!is.na(studyno)),
+            mean=mean(mean_nucop_od),
+            sd=sd(mean_nucop_od))
+
+pwr.t2n.test(n1=677, n2=60, sig.level = 0.05, power = 0.8)
+
+# 15 year analysis
+data %>% filter(status==1) %>%
+  group_by(fuel.bin.f) %>%
+  summarize(n=sum(!is.na(studyno)))
+
+pwr.2p2n.test(n1=515, n2=41, sig.level = 0.05, power = 0.8)
+
 #### table 1 ####
 
 # creating functions
