@@ -6,8 +6,8 @@
 library(tidyverse)
 library(here)
 
-#### importing and cleaning data ####
-data <- read_csv(here("data","data_clean.csv"))
+#### use dataprep.R to clean and import data ####
+# factor levels are not preserved when read/writing csv's
 
 #### table 2 -- univariable regression ####
 library(survival)
@@ -19,7 +19,7 @@ summary(base, times = 15*365.25)
 survfit(Surv(censortimeou, cataract) ~ 1, data = data)
 
 # iterating through variables
-coxph(Surv(censortimeou, cataract)~fuel.f, data=data) %>% 
+coxph(Surv(censortimeou, cataract)~sphere.2f, data=data) %>% 
   broom::tidy(., conf.int=T, exp=T) %>% 
   select(term, estimate, conf.low, conf.high) %>%
   mutate(estimate=round(estimate, digits = 1),
@@ -28,10 +28,10 @@ coxph(Surv(censortimeou, cataract)~fuel.f, data=data) %>%
   unite(ci, conf.low, conf.high, sep = " to ") %>%
   mutate(ci=paste0("(",ci,")")) %>%
   unite(estci, estimate, ci, sep = " ") %>%
-  write_csv(., here("tables", "table2", "coxunadj.csv"))
+  write_csv(., here("tables", "table2", "coxref.csv"))
   
 # p-value 
-coxph(Surv(censortimeou, cataract)~fuel.f, data=data)
+coxph(Surv(censortimeou, cataract)~sphere.2f, data=data)
 
 #### table 3 -- assessing for confounders ####
 # base model
@@ -59,7 +59,7 @@ cox.final <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + # agecat
                      sphere.2f +  # sphere.4f
                       nucop + cor + ps,
                      # + bmicat
-                   data = data)
+                   data = filter(data, !is.na(ses.f)))
 
 broom::tidy(cox.final, conf.int=T, exp=T) %>% view()
 
@@ -74,17 +74,27 @@ broom::tidy(cox.final, conf.int=T, exp=T) %>%
   unite(estci, estimate, ci, sep = " ") %>%
   write_csv(., here("tables","table4", "coxfinal.csv"))
 
+#### NOTE TO SELF NEED TO TEST FOR DEPARTURE FROM LINEARITY
+
 # obtaining p-values through LRT
-cox.without <- coxph(Surv(censortimeou, cataract) ~ fuel.f + agecat + sex1 + ses.f + 
-                       occu.f + kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.4f,
-                     # + bmicat     map.3f + 
-                     data = filter(data, !is.na(map.3f)))
+cox.without <-  coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + # agecat
+                        #  
+                        sex1 + occu.f + ses.f +
+                        map.3f + kitchen.f + packall.f + # smoke.2f
+                        potobac.f +  + # uv_yrs.f
+                        sphere.2f +  # sphere.4f
+                        nucop + cor + ps,
+                      # + bmicat
+                      data = filter(data, !is.na(ses)))
 
 lmtest::lrtest(cox.without, cox.final)
 
 #### sensitivity analyses -- only those with complete follow up ####
-m.sens <- coxph(Surv(censortimeou, cataract) ~ fuel.f + agecat + sex1 + ses.f + occu.f + 
-                  map.3f + kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.4f,
+m.sens <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + # agecat
+                  sex1 + ses.f + occu.f + 
+                  map.3f + kitchen.f + packall.f + potobac.f + uv_yrs + #  uv_yrs.f
+                  sphere.2f +
+                  nucop + cor + ps,
                 data = filter(data, status==1))
 summary(m.sens)
 
@@ -100,16 +110,20 @@ m.sens %>% broom::tidy(., conf.int=T, exp=T) %>%
   write_csv(., here("tables","coxsens", "coxsens.csv"))
 
 # p-values
-m.senswo <- coxph(Surv(censortimeou, cataract) ~ fuel.f + agecat + sex1 + ses.f + occu.f + 
-                    map.3f + kitchen.f + packall.f + potobac.f + uv_yrs.f,
-                  data = filter(data, status==1 & !is.na(sphere.4f))) #   + sphere.4f
+m.senswo <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + # agecat
+                    # uv_yrs + #  uv_yrs.f
+                    sex1 + ses.f + occu.f + 
+                    map.3f + kitchen.f + packall.f + potobac.f + 
+                    sphere.2f +
+                    nucop + cor + ps,
+                  data = filter(data, status==1))
 
 lmtest::lrtest(m.senswo, m.sens)
 
   
 #### figure 2 -- results from cox regression ####
 
-ref <- data.frame(parameter = c("35-39","35-39","35-39",
+ref <- data.frame(parameter = c(#"35-39","35-39","35-39",
                                 "Agriculture","Agriculture","Agriculture",
                                 "Optimal","Optimal","Optimal",
                                 "Kerosene","Kerosene","Kerosene",
@@ -118,12 +132,13 @@ ref <- data.frame(parameter = c("35-39","35-39","35-39",
                                 "None","None","None",
                                 "Lowest","Lowest","Lowest",
                                 "Female","Female","Female",
-                                "No error","No error","No error",
-                                "1st quantile","1st quantile","1st quantile"),
-                  estimate = rep(c(1,1,1), times = 11),
-                  conf.low = rep(c(1,1,1), times = 11),
-                  conf.high = rep(c(1,1,1), times = 11),
-                  var = c("Age","Age","Age",
+                                "No error","No error","No error"
+                                #"1st quantile","1st quantile","1st quantile"
+                                ),
+                  estimate = rep(c(1,1,1), times = 9),
+                  conf.low = rep(c(1,1,1), times = 9),
+                  conf.high = rep(c(1,1,1), times = 9),
+                  var = c(# "Age","Age","Age",
                           "Occupation","Occupation","Occupation",
                           "MAP","MAP","MAP",
                           "Fuel","Fuel","Fuel",
@@ -132,13 +147,14 @@ ref <- data.frame(parameter = c("35-39","35-39","35-39",
                           "Snuff / betel use","Snuff / betel use","Snuff / betel use",
                           "SES","SES","SES",
                           "Sex","Sex","Sex",
-                          "Refractive error","Refractive error","Refractive error",
-                          "Sun exposure","Sun exposure","Sun exposure"))
+                          "Refractive error","Refractive error","Refractive error"
+                          # "Sun exposure","Sun exposure","Sun exposure"
+                          ))
 
 figdata <- broom::tidy(cox.final, conf.int=T, exp=T) %>%
   select(term, estimate, conf.low, conf.high) %>%
   rename(parameter = term) %>%
-  mutate(var=case_when(grepl("agecat", parameter)~"Age",
+  mutate(var=factor(case_when(grepl("age_house", parameter)~"Age",
                        grepl("occu.f", parameter)~"Occupation",
                        grepl("map.3f", parameter)~"MAP",
                        grepl("fuel.f", parameter)~"Fuel",
@@ -147,11 +163,16 @@ figdata <- broom::tidy(cox.final, conf.int=T, exp=T) %>%
                        grepl("potobac", parameter)~"Snuff / betel use",
                        grepl("ses.f", parameter)~"SES",
                        grepl("sex", parameter)~"Sex",
-                       grepl("sphere.4f", parameter)~"Refractive error",
-                       grepl("uv_yrs", parameter)~"Sun exposure"),
-         parameter=factor(case_when(parameter == "agecat40-44" ~ "40-44",
-                                    parameter == "agecat45-49" ~ "45-49",
-                                    parameter == "agecat50+" ~ "50+",
+                       grepl("sphere.2f", parameter)~"Refractive error",
+                       grepl("uv_yrs", parameter)~"Sun exposure",
+                       grepl("nucop", parameter) ~ "Cataract severity",
+                       grepl("cor", parameter) ~ "Cataract severity",
+                       grepl("ps", parameter) ~ "Cataract severity"),
+                    levels = c("Fuel", "Age","Sex","SES","Occupation","Kitchen","Smoking","Snuff / betel use",
+                               "MAP","Sun exposure","Refractive error","Cataract severity")),
+         parameter=factor(case_when(parameter == "age_house" ~ "Age",
+                                    # parameter == "agecat45-49" ~ "45-49",
+                                    # parameter == "agecat50+" ~ "50+",
                                     parameter == "occu.funemployed" ~ "Unemployed",
                                     parameter == "occu.fother" ~ "Other",
                                     parameter == "map.3fnormal" ~ "Normal",
@@ -168,23 +189,28 @@ figdata <- broom::tidy(cox.final, conf.int=T, exp=T) %>%
                                     parameter == "ses.f3" ~ "Middle",
                                     parameter == "ses.f4" ~ "Upper",
                                     parameter == "sex1Male" ~ "Male",
-                                    parameter == "sphere.4fhyperopia" ~ "Hyperopia",
-                                    parameter == "sphere.4flow myopia" ~ "Low myopia",
-                                    parameter == "sphere.4fmod-high myopia" ~ "Moderate-\nhigh myopia",
-                                    parameter == "uv_yrs.fHigh" ~ "5th quantile",
-                                    parameter == "uv_yrs.fHigh-Med" ~ "4th quantile",
-                                    parameter == "uv_yrs.fLow-Med" ~ "2nd quantile",
-                                    parameter == "uv_yrs.fMed" ~ "3rd quantile"), 
-                          levels = c("35-39","40-44", "45-49", "50+", "Female", "Male", # age and sex
+                                    parameter == "sphere.2fhyperopia" ~ "Hyperopia",
+                                    parameter == "sphere.2fmyopia" ~ "Myopia",
+                                    # parameter == "sphere.2fmod-high myopia" ~ "Moderate-\nhigh myopia",
+                                    parameter == "uv_yrs" ~ "Sun exposure",
+                                    # parameter == "uv_yrs.fHigh-Med" ~ "4th quantile",
+                                    # parameter == "uv_yrs.fLow-Med" ~ "2nd quantile",
+                                    # parameter == "uv_yrs.fMed" ~ "3rd quantile"
+                                    parameter == "nucop" ~ "Nuclear",
+                                    parameter == "cor" ~ "Cortical",
+                                    parameter == "ps" ~ "Subcapsular"), 
+                          levels = c("Kerosene","Propane", "Wood", # fuel
+                                     "Age", 
+                                     "Female", "Male", # sex
                                      "Agriculture","Unemployed","Other", # Occupation
                                      "Optimal", "Normal", "High", # MAP
-                                     "Kerosene","Propane", "Wood", # fuel
                                      "No", "Yes", # kitchen
                                      "Never","Light", "Heavy", # smoking
                                      "None","Low", "Moderate","Highest", # potobac
                                      "Lowest","Lower-middle", "Middle", "Upper", # SES
-                                     "1st quantile","2nd quantile", "3rd quantile", "4th quantile","5th quantile", # sun
-                                     "No error","Hyperopia", "Low myopia", "Moderate-\nhigh myopia"))) %>% # ref error
+                                     "Sun exposure", # sun
+                                     "No error","Hyperopia", "Myopia", # ref error
+                                     "Nuclear", "Cortical", "Subcapsular"))) %>% # baseline cat severity 
   rbind(., ref)
 
 # actual figure
@@ -211,7 +237,7 @@ fig2 <- figdata %>%
   # changing the facet titles to be black and white
   theme(strip.background = element_rect(fill = "white"),
         strip.text.x = element_text(size = 9)) +
-  labs(y = "Relative Risk (95% CI)", x = "Variables")
+  labs(y = "Relative Rate (95% CI)", x = "Variables")
 fig2
 
 # saving
