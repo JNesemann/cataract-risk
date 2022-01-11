@@ -9,14 +9,21 @@ library(here)
 #### use dataprep.R to clean and import data ####
 # factor levels are not preserved when read/writing csv's
 
+#### results paragraph 1 -- time at risk and 3 events ####
+data %>% filter(status == 1) %>%
+  summarise(n=sum(!is.na(studyno)),
+            n_cat=sum(cataract==1),
+            yrs=sum(censortimeou)/365,
+            rate=n_cat/yrs *100)
+
 #### table 2 -- univariable regression ####
 library(survival)
 library(survminer)
 
 # base model
-base <- survfit(Surv(censortimeou, cataract) ~ 1, data=data) # %>% broom::tidy(., conf.int=T)
+base <- survfit(Surv(censortimeou, cataract) ~ 1, data=data) # 
 summary(base, times = 15*365.25) 
-survfit(Surv(censortimeou, cataract) ~ 1, data = data)
+survfit(Surv(censortimeou, cataract) ~ 1, data = data) %>% broom::tidy(., conf.int=T)
 
 # iterating through variables
 coxph(Surv(censortimeou, cataract)~map, data=data) %>% 
