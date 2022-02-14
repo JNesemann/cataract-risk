@@ -434,7 +434,7 @@ data.eye <- data %>%
                 occucode=occuc_ode, occucodesimple=occuc_ode_simple, 
                 radexpos=radexp_os, bpdios=bpdi_os, glucose=gluc_ose, 
                 bcva.f_od=bcva_od.f, bcva.f_os=bcva_os.f,
-                # bcva.3f_od = bcva_od.3f, bcva.3f_os = bcva_os.3f,
+                bcva.3f_od = bcva_od.3f, bcva.3f_os = bcva_os.3f,
                 bcva.n_os=bcva_os.n, bcva.n_od=bcva_od.n) %>%
   # selecting all eye vars
   dplyr::select(dplyr::contains("_od"), dplyr::contains("_os"), everything()) %>%
@@ -444,7 +444,7 @@ data.eye <- data %>%
   pivot_longer(vasc_od:bcva.n_os, 
                names_to = c("var","eye"), 
                names_sep = "_", 
-               values_to = "value") %>%
+               values_to = "value") %>% 
   # unselecting the person level bcva as it results in duplicate column names
   select(-bcva.3f, -bcva.n) %>%
   # pivoting wider - should get 798 * 2 = 1596
@@ -478,4 +478,5 @@ data.eye <- data %>%
          bcva.n=as.numeric(bcva.n))
 data.eye
 
-
+# checking for duplicates
+data.eye %>% group_by(studyno) %>% mutate(dups=n()) %>% ungroup() %>% summarise(dups=sum(dups>2)) # no dups

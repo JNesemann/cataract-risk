@@ -1,6 +1,4 @@
 # 15 year surgery risk analysis
-# John Nesemann
-# November 29 2021
 
 # packages
 library(tidyverse)
@@ -16,6 +14,15 @@ data %>% filter(status == 1) %>%
             yrs=sum(censortimeou)/365,
             rate=n_cat/yrs *100)
 
+# poisson model with time at risk to get rate + 95%CIs
+ggplot(data=data, aes(x=cataract)) + geom_histogram()
+rate.m <- glm(cataract ~ offset(log(censortimeou/365)), family = "poisson", data = filter(data, status == 1)) 
+rate.m %>% broom::tidy(., conf.int=T, exp = T)
+0.0108*100 # estimate
+0.00872*100 # low
+0.0132*100 # high
+
+
 #### table 2 -- univariable regression ####
 library(survival)
 library(survminer)
@@ -23,7 +30,6 @@ library(survminer)
 # base model
 base <- survfit(Surv(censortimeou, cataract) ~ 1, data=data) # 
 summary(base, times = 15*365.25) 
-survfit(Surv(censortimeou, cataract) ~ 1, data = data) %>% broom::tidy(., conf.int=T)
 
 # iterating through variables
 coxph(Surv(censortimeou, cataract)~map, data=data) %>% 
@@ -34,29 +40,29 @@ coxph(Surv(censortimeou, cataract)~map, data=data) %>%
          conf.high=round(conf.high, digits = 1)) %>%
   unite(ci, conf.low, conf.high, sep = " to ") %>%
   mutate(ci=paste0("(",ci,")")) %>%
-  unite(estci, estimate, ci, sep = " ") #%>%
-  write_csv(., here("tables", "table2", "coxage.csv"))
+  unite(estci, estimate, ci, sep = " ") %>%
+  write_csv(., here("tables", "table2", "coxmap.csv"))
   
 # p-value 
-coxph(Surv(censortimeou, cataract)~uv_yrs.f, data=data)
+coxph(Surv(censortimeou, cataract)~map, data=data)
 
-#### table 3 -- assessing for confounders ####
-# base model
-coxph(Surv(censortimeou, cataract) ~ fuel.f, data=data) %>%
-  broom::tidy(., conf.int=T, exp=T)
-
-# iterating through the variables
-coxph(Surv(censortimeou, cataract) ~ fuel.f + sphere.4f, data=data) %>% 
-  broom::tidy(., conf.int=T, exp=T) %>%
-  filter(term %in% c("fuel.fpropane","fuel.fwood")) %>%
-  select(term, estimate, conf.low, conf.high) %>%
-  mutate(estimate=round(estimate, digits = 1),
-         conf.low=round(conf.low, digits=1),
-         conf.high=round(conf.high, digits = 1)) %>%
-  unite(ci, conf.low, conf.high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  unite(estci, estimate, ci, sep = " ") %>%
-  write_csv(., here("tables","table3","coxref.csv"))
+# #### table 3 -- assessing for confounders ####
+# # base model
+# coxph(Surv(censortimeou, cataract) ~ fuel.f, data=data) %>%
+#   broom::tidy(., conf.int=T, exp=T)
+# 
+# # iterating through the variables
+# coxph(Surv(censortimeou, cataract) ~ fuel.f + sphere.4f, data=data) %>% 
+#   broom::tidy(., conf.int=T, exp=T) %>%
+#   filter(term %in% c("fuel.fpropane","fuel.fwood")) %>%
+#   select(term, estimate, conf.low, conf.high) %>%
+#   mutate(estimate=round(estimate, digits = 1),
+#          conf.low=round(conf.low, digits=1),
+#          conf.high=round(conf.high, digits = 1)) %>%
+#   unite(ci, conf.low, conf.high, sep = " to ") %>%
+#   mutate(ci=paste0("(",ci,")")) %>%
+#   unite(estci, estimate, ci, sep = " ") %>%
+#   write_csv(., here("tables","table3","coxref.csv"))
 
 #### table 4 -- final model ####  
 cox.final <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + # agecat
@@ -182,117 +188,117 @@ m.senswo <- coxph(Surv(censortimeou, cataract) ~ fuel.f + sex1 + age_house + occ
 lmtest::lrtest(m.senswo, m.sens)
 
   
-#### figure 2 -- results from cox regression ####
-
-ref <- data.frame(parameter = c("Wood",  # cooking fuel
-                                "Female", # sex
-                                "Lowest", # SES
-                                "No", # kitchen
-                                "Agriculture", # Occupation
-                                "Never", # Smoking status
-                                "None", # Snuff / betel
-                                "1st quantile", # sun exposure
-                                "No error", # ref error
-                                "20/20"),
-                  estimate = rep(1, times = 10),
-                  conf.low = rep(1, times = 10),
-                  conf.high = rep(1, times = 10),
-                  var = c("Cooking fuel",
-                          "Sex",
-                          "SES",
-                          "Kitchen",
-                          "Occupation",
-                          "Smoking",
-                          "Snuff / betel use",
-                          "Sun exposure",
-                          "Refractive error",
-                          "BCVA"))
-
-figdata <- broom::tidy(cox.final, conf.int=T, exp=T) %>% # START HERE TOMORROW
-  select(term, estimate, conf.low, conf.high) %>%
-  rename(parameter = term) %>%
-  mutate(var=factor(case_when(grepl("age_house", parameter)~"Age",
-                       grepl("occu.f", parameter)~"Occupation",
-                       grepl("fuel.f", parameter)~"Cooking fuel",
-                       grepl("kitchen.f", parameter)~"Kitchen",
-                       grepl("packall.f", parameter)~"Smoking",
-                       grepl("potobac", parameter)~"Snuff / betel use",
-                       grepl("ses.f", parameter)~"SES",
-                       grepl("sex", parameter)~"Sex",
-                       grepl("sphere.2f", parameter)~"Refractive error",
-                       grepl("uv_yrs.f", parameter)~"Sun exposure",
-                       grepl("bcva.3f", parameter) ~ "BCVA"),
-                    levels = c("Cooking fuel","Age","Sex","SES","Occupation","Kitchen","Smoking","Snuff / betel use",
-                               "Sun exposure","Refractive error","BCVA")),
-         parameter=factor(case_when(parameter == "age_house" ~ "Age",
-                                    parameter == "occu.funemployed" ~ "Unemployed",
-                                    parameter == "occu.fother" ~ "Other",
-                                    parameter == "fuel.fpropane" ~ "Propane",
-                                    parameter == "fuel.fkerosene" ~ "Kerosene",
-                                    parameter == "kitchen.fYes" ~ "Yes",
-                                    parameter == "packall.fHeavy" ~ "Heavy",
-                                    parameter == "packall.fLight" ~ "Light",
-                                    parameter == "potobac.fHigh" ~ "Highest",
-                                    parameter == "potobac.fLow" ~ "Low",
-                                    parameter == "potobac.fMed" ~ "Moderate",
-                                    parameter == "ses.f2" ~ "Lower-middle",
-                                    parameter == "ses.f3" ~ "Middle",
-                                    parameter == "ses.f4" ~ "Upper",
-                                    parameter == "sex1Male" ~ "Male",
-                                    parameter == "sphere.2fhyperopia" ~ "Hyperopia",
-                                    parameter == "sphere.2fmyopia" ~ "Myopia",
-                                    parameter == "bcva.3fbt20/20" ~ "Better than \n20/20",
-                                    parameter == "bcva.3fwt20/20" ~ "Worse than \n20/20",
-                                    parameter == "uv_yrs.fHigh" ~ "5th quantile",
-                                    parameter == "uv_yrs.fHigh-Med" ~ "4th quantile",
-                                    parameter == "uv_yrs.fLow-Med" ~ "2nd quantile",
-                                    parameter == "uv_yrs.fMed" ~ "3rd quantile"), 
-                          levels = c("Wood","Kerosene","Propane", # fuel
-                                     "Age", 
-                                     "Female", "Male", # sex
-                                     "Agriculture","Unemployed","Other", # Occupation
-                                     "No", "Yes", # kitchen
-                                     "Never","Light", "Heavy", # smoking
-                                     "None","Low", "Moderate","Highest", # potobac
-                                     "Lowest","Lower-middle", "Middle", "Upper", # SES
-                                     "1st quantile","2nd quantile","3rd quantile","4th quantile","5th quantile", # sun
-                                     "No error","Hyperopia", "Myopia", # ref error
-                                     "20/20", "Better than \n20/20", "Worse than \n20/20"))) %>% # visual acuity
-  rbind(., ref)
-
-# actual figure
-fig2 <- figdata %>%
-  ggplot(aes(x=parameter, y=estimate, label = parameter)) +
-  geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
-                  alpha = 0.8,
-                  position = position_dodge2(width = 0.5,  
-                                             padding = 0.4)) +
-  geom_hline(yintercept = 1, linetype=3) + 
-  facet_grid(cols = vars(var), scales = "free_x") +
-  theme_bw() +
-  theme(axis.text.x = element_text(size = 9, angle = 45, 
-                                   hjust = 0.8),
-        axis.text.y = element_text(size = 9),
-        axis.title = element_text(size = 9),
-        legend.text = element_text(size = 9),
-        legend.title = element_text(size = 9),
-        panel.border = element_rect(color = "black", 
-                                    size = 0.5,
-                                    linetype = 1),
-        panel.spacing.x = unit(0, "line"),
-        panel.grid.major.x = element_blank()) +
-  # changing the facet titles to be black and white
-  theme(strip.background = element_rect(fill = "white"),
-        strip.text.x = element_text(size = 9)) +
-  labs(y = "Relative Rate (95% CI)", x = "Variables")
-fig2
-
-# saving
-ggsave(here("figures","fig2","fig2.eps"),
-       fig2,
-       device = cairo_ps,
-       height = 4.5, width = 14, units = "in",
-       dpi = 300)
+# #### figure 2 -- results from cox regression ####
+# 
+# ref <- data.frame(parameter = c("Wood",  # cooking fuel
+#                                 "Female", # sex
+#                                 "Lowest", # SES
+#                                 "No", # kitchen
+#                                 "Agriculture", # Occupation
+#                                 "Never", # Smoking status
+#                                 "None", # Snuff / betel
+#                                 "1st quantile", # sun exposure
+#                                 "No error", # ref error
+#                                 "20/20"),
+#                   estimate = rep(1, times = 10),
+#                   conf.low = rep(1, times = 10),
+#                   conf.high = rep(1, times = 10),
+#                   var = c("Cooking fuel",
+#                           "Sex",
+#                           "SES",
+#                           "Kitchen",
+#                           "Occupation",
+#                           "Smoking",
+#                           "Snuff / betel use",
+#                           "Sun exposure",
+#                           "Refractive error",
+#                           "BCVA"))
+# 
+# figdata <- broom::tidy(cox.final, conf.int=T, exp=T) %>% # START HERE TOMORROW
+#   select(term, estimate, conf.low, conf.high) %>%
+#   rename(parameter = term) %>%
+#   mutate(var=factor(case_when(grepl("age_house", parameter)~"Age",
+#                        grepl("occu.f", parameter)~"Occupation",
+#                        grepl("fuel.f", parameter)~"Cooking fuel",
+#                        grepl("kitchen.f", parameter)~"Kitchen",
+#                        grepl("packall.f", parameter)~"Smoking",
+#                        grepl("potobac", parameter)~"Snuff / betel use",
+#                        grepl("ses.f", parameter)~"SES",
+#                        grepl("sex", parameter)~"Sex",
+#                        grepl("sphere.2f", parameter)~"Refractive error",
+#                        grepl("uv_yrs.f", parameter)~"Sun exposure",
+#                        grepl("bcva.3f", parameter) ~ "BCVA"),
+#                     levels = c("Cooking fuel","Age","Sex","SES","Occupation","Kitchen","Smoking","Snuff / betel use",
+#                                "Sun exposure","Refractive error","BCVA")),
+#          parameter=factor(case_when(parameter == "age_house" ~ "Age",
+#                                     parameter == "occu.funemployed" ~ "Unemployed",
+#                                     parameter == "occu.fother" ~ "Other",
+#                                     parameter == "fuel.fpropane" ~ "Propane",
+#                                     parameter == "fuel.fkerosene" ~ "Kerosene",
+#                                     parameter == "kitchen.fYes" ~ "Yes",
+#                                     parameter == "packall.fHeavy" ~ "Heavy",
+#                                     parameter == "packall.fLight" ~ "Light",
+#                                     parameter == "potobac.fHigh" ~ "Highest",
+#                                     parameter == "potobac.fLow" ~ "Low",
+#                                     parameter == "potobac.fMed" ~ "Moderate",
+#                                     parameter == "ses.f2" ~ "Lower-middle",
+#                                     parameter == "ses.f3" ~ "Middle",
+#                                     parameter == "ses.f4" ~ "Upper",
+#                                     parameter == "sex1Male" ~ "Male",
+#                                     parameter == "sphere.2fhyperopia" ~ "Hyperopia",
+#                                     parameter == "sphere.2fmyopia" ~ "Myopia",
+#                                     parameter == "bcva.3fbt20/20" ~ "Better than \n20/20",
+#                                     parameter == "bcva.3fwt20/20" ~ "Worse than \n20/20",
+#                                     parameter == "uv_yrs.fHigh" ~ "5th quantile",
+#                                     parameter == "uv_yrs.fHigh-Med" ~ "4th quantile",
+#                                     parameter == "uv_yrs.fLow-Med" ~ "2nd quantile",
+#                                     parameter == "uv_yrs.fMed" ~ "3rd quantile"), 
+#                           levels = c("Wood","Kerosene","Propane", # fuel
+#                                      "Age", 
+#                                      "Female", "Male", # sex
+#                                      "Agriculture","Unemployed","Other", # Occupation
+#                                      "No", "Yes", # kitchen
+#                                      "Never","Light", "Heavy", # smoking
+#                                      "None","Low", "Moderate","Highest", # potobac
+#                                      "Lowest","Lower-middle", "Middle", "Upper", # SES
+#                                      "1st quantile","2nd quantile","3rd quantile","4th quantile","5th quantile", # sun
+#                                      "No error","Hyperopia", "Myopia", # ref error
+#                                      "20/20", "Better than \n20/20", "Worse than \n20/20"))) %>% # visual acuity
+#   rbind(., ref)
+# 
+# # actual figure
+# fig2 <- figdata %>%
+#   ggplot(aes(x=parameter, y=estimate, label = parameter)) +
+#   geom_pointrange(aes(ymin = conf.low, ymax = conf.high),
+#                   alpha = 0.8,
+#                   position = position_dodge2(width = 0.5,  
+#                                              padding = 0.4)) +
+#   geom_hline(yintercept = 1, linetype=3) + 
+#   facet_grid(cols = vars(var), scales = "free_x") +
+#   theme_bw() +
+#   theme(axis.text.x = element_text(size = 9, angle = 45, 
+#                                    hjust = 0.8),
+#         axis.text.y = element_text(size = 9),
+#         axis.title = element_text(size = 9),
+#         legend.text = element_text(size = 9),
+#         legend.title = element_text(size = 9),
+#         panel.border = element_rect(color = "black", 
+#                                     size = 0.5,
+#                                     linetype = 1),
+#         panel.spacing.x = unit(0, "line"),
+#         panel.grid.major.x = element_blank()) +
+#   # changing the facet titles to be black and white
+#   theme(strip.background = element_rect(fill = "white"),
+#         strip.text.x = element_text(size = 9)) +
+#   labs(y = "Relative Rate (95% CI)", x = "Variables")
+# fig2
+# 
+# # saving
+# ggsave(here("figures","fig2","fig2.eps"),
+#        fig2,
+#        device = cairo_ps,
+#        height = 4.5, width = 14, units = "in",
+#        dpi = 300)
 
 
 
