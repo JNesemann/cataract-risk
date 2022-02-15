@@ -710,6 +710,22 @@ anova(m.sens)
 
 #### interaction with sex in final model ####
 
+# running the new model
+m.sexint <- gls(score ~ 0 + cattype + cattype:fuel.f * cattype:sex1 + cattype:age_house + cattype:bcva.3f +
+                 cattype:ses.f + cattype:educ.f + cattype:bmicat + cattype:kitchen.f + cattype:occu.f +
+                 cattype:packall.f + cattype:potobac.f + cattype:uv_yrs.f + cattype:sphere.2f,
+               weights = varIdent(form=~1 | cattype),
+               correlation = corSymm(form=~1 | studyno),
+               data = filter(data.long, !is.na(fuel.f) & !is.na(ses.f) & !is.na(educ.f)
+                             & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
+                             & !is.na(potobac.f) & !is.na(uv_yrs.f) & !is.na(occu.f)))
+
+# comparing with final model
+m.final # Log-restricted-likelihood: -117.4783
+m.sexint # Log-restricted-likelihood: -123.2346
+
+# lrtest comparing model with and without interaction term
+lmtest::lrtest(m.final, m.sexint) # p = 0.07377
 
 #### old code #### 
 # #### figure ####

@@ -132,36 +132,80 @@ cox.without <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + sex1 + 
 
 lmtest::lrtest(cox.without, cox.final)
 
+#### testing PH assumption ####
+ph_data <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + 
+          sex1 + ses.f + occu.f + 
+          kitchen.f + packall.f + 
+          potobac.f + uv_yrs.f + 
+          sphere.2f + bcva.3f,
+        data = filter(data, !is.na(ses.f))) %>% 
+  cox.zph(.)
+ph_data
+
+ph.plot <- ggcoxzph(ph_data)
+ph.plot
+
+#### final model with sex interaction term ####
+cox.sex <- coxph(Surv(censortimeou, cataract) ~ fuel.f*sex1 + age_house + ses.f + occu.f +  # 
+        kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.2f + bcva.3f, 
+      data = filter(data, !is.na(ses.f))) 
+
+summary(cox.sex) 
+# Concordance= 0.799  (se = 0.021 )
+# Likelihood ratio test= 103.3  on 25 df,   p=2e-11
+# Wald test            = 94.71  on 25 df,   p=5e-10
+# Score (logrank) test = 116.5  on 25 df,   p=9e-14
+summary(cox.final)
+# Concordance= 0.797  (se = 0.021 )
+# Likelihood ratio test= 102.1  on 23 df,   p=6e-12
+# Wald test            = 95.16  on 23 df,   p=1e-10
+# Score (logrank) test = 114.6  on 23 df,   p=4e-14
+
+cox.sex # LRT 103.3
+cox.final # LRT 102.1
+
+# AIC
+extractAIC(cox.sex) # 25.000 1004.759
+extractAIC(cox.final) # 23.000 1001.954
+
+# interpretation: https://www.scribbr.com/statistics/akaike-information-criterion/#:~:text=The%20AIC%20function%20is%202K,it%20is%20being%20compared%20to.
+# final model has smaller AIC so better fit
+# also the difference is >2 so fit is significantly better
+
+# lrt comparing
+lmtest::lrtest(cox.final, cox.sex) # p-value 0.5504
+
+
 #### final model stratified by sex ####
-cox.f <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + ses.f + occu.f +  # 
-                       kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.2f + bcva.3f, 
-                     data = filter(data, !is.na(ses.f) & sex1 == "Female"))
-
-broom::tidy(cox.f, conf.int=T, exp=T) %>% 
-  select(term, estimate, conf.low, conf.high) %>%
-  filter(term %in% c("fuel.fkerosene", "fuel.fpropane")) %>%
-  mutate(estimate=round(estimate, digits = 1),
-         conf.low=round(conf.low, digits=1),
-         conf.high=round(conf.high, digits = 1)) %>%
-  unite(ci, conf.low, conf.high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  unite(estci, estimate, ci, sep = " ") %>%
-  write_csv(., here("tables","sex_stratified", "coxfemale.csv"))
-
-cox.m <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + ses.f + occu.f +  # 
-                 kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.2f + bcva.3f, 
-               data = filter(data, !is.na(ses.f) & sex1 == "Male"))
-
-broom::tidy(cox.m, conf.int=T, exp=T) %>% 
-  select(term, estimate, conf.low, conf.high) %>%
-  filter(term %in% c("fuel.fkerosene", "fuel.fpropane")) %>%
-  mutate(estimate=round(estimate, digits = 1),
-         conf.low=round(conf.low, digits=1),
-         conf.high=round(conf.high, digits = 1)) %>%
-  unite(ci, conf.low, conf.high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  unite(estci, estimate, ci, sep = " ") %>%
-  write_csv(., here("tables","sex_stratified", "coxmale.csv"))
+# cox.f <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + ses.f + occu.f +  # 
+#                        kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.2f + bcva.3f, 
+#                      data = filter(data, !is.na(ses.f) & sex1 == "Female"))
+# 
+# broom::tidy(cox.f, conf.int=T, exp=T) %>% 
+#   select(term, estimate, conf.low, conf.high) %>%
+#   filter(term %in% c("fuel.fkerosene", "fuel.fpropane")) %>%
+#   mutate(estimate=round(estimate, digits = 1),
+#          conf.low=round(conf.low, digits=1),
+#          conf.high=round(conf.high, digits = 1)) %>%
+#   unite(ci, conf.low, conf.high, sep = " to ") %>%
+#   mutate(ci=paste0("(",ci,")")) %>%
+#   unite(estci, estimate, ci, sep = " ") %>%
+#   write_csv(., here("tables","sex_stratified", "coxfemale.csv"))
+# 
+# cox.m <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + ses.f + occu.f +  # 
+#                  kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.2f + bcva.3f, 
+#                data = filter(data, !is.na(ses.f) & sex1 == "Male"))
+# 
+# broom::tidy(cox.m, conf.int=T, exp=T) %>% 
+#   select(term, estimate, conf.low, conf.high) %>%
+#   filter(term %in% c("fuel.fkerosene", "fuel.fpropane")) %>%
+#   mutate(estimate=round(estimate, digits = 1),
+#          conf.low=round(conf.low, digits=1),
+#          conf.high=round(conf.high, digits = 1)) %>%
+#   unite(ci, conf.low, conf.high, sep = " to ") %>%
+#   mutate(ci=paste0("(",ci,")")) %>%
+#   unite(estci, estimate, ci, sep = " ") %>%
+#   write_csv(., here("tables","sex_stratified", "coxmale.csv"))
 
 #### sensitivity analyses -- only those with complete follow up ####
 m.sens <- coxph(Surv(censortimeou, cataract) ~ fuel.f + sex1 + age_house + ses.f + occu.f +  # 
