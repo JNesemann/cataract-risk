@@ -87,6 +87,12 @@ cor.test(data.eye$mean.nucop, data.eye$mean.cor, method = "spearman")
 cor.test(data.eye$mean.nucop, data.eye$mean.ps, method = "spearman")
 cor.test(data.eye$mean.cor, data.eye$mean.ps, method = "spearman")
 
+#### results paragraph 2 -- mean / SD age ####
+data %>% ungroup() %>%
+  summarise(n=sum(!is.na(studyno)),
+            mean_age=mean(age_house),
+            sd_age=sd(age_house))
+
 #### table 1 ####
 
 # creating functions
@@ -366,6 +372,43 @@ table1.fueye <- data.eye %>% ungroup() %>%
 
 table1.fueye
 write_csv(table1.fueye, here("tables","table1","table1_fueye.csv"))
+
+# refraction and bcva in the worse and better eye, respectively
+
+#everyone
+data %>% 
+  summarise(n=sum(!is.na(studyno)),
+            n_20=sum(bcva.3f=="20/20"),
+            p_20=n_20/n*100,
+            n_wt20=sum(bcva.3f=="wt20/20"),
+            p_wt20=n_wt20/n*100,
+            n_bt20=sum(bcva.3f=="bt20/20"),
+            p_bt20=n_bt20/n*100,
+            n_no=sum(sphere.2f=="none"),
+            p_no=n_no/n*100,
+            n_hyper=sum(sphere.2f=="hyperopia"),
+            p_hyper=n_hyper/n*100,
+            n_myo=sum(sphere.2f=="myopia"),
+            p_myo=n_myo/n*100)
+
+# 15-year follow up
+data %>% ungroup() %>%
+  mutate(status.f=case_when(status==1~"followed",
+                            status %in% c(2,3)~"dead or lost")) %>% 
+  group_by(status.f) %>%
+  summarise(n=sum(!is.na(studyno)),
+            n_20=sum(bcva.3f=="20/20"),
+            p_20=n_20/n*100,
+            n_wt20=sum(bcva.3f=="wt20/20"),
+            p_wt20=n_wt20/n*100,
+            n_bt20=sum(bcva.3f=="bt20/20"),
+            p_bt20=n_bt20/n*100,
+            n_no=sum(sphere.2f=="none"),
+            p_no=n_no/n*100,
+            n_hyper=sum(sphere.2f=="hyperopia"),
+            p_hyper=n_hyper/n*100,
+            n_myo=sum(sphere.2f=="myopia"),
+            p_myo=n_myo/n*100)
 
 
 #### results paragraph 2 -- exploring age and sex distribution with cooking fuel ####

@@ -16,7 +16,7 @@ data %>% filter(status == 1) %>%
 
 # poisson model with time at risk to get rate + 95%CIs
 ggplot(data=data, aes(x=cataract)) + geom_histogram()
-rate.m <- glm(cataract ~ offset(log(censortimeou/365)), family = "poisson", data = filter(data, status == 1)) 
+rate.m <- glm(cataract ~ offset(log(censortimeou/365)), family = "poisson", data = data)
 rate.m %>% broom::tidy(., conf.int=T, exp = T)
 0.0108*100 # estimate
 0.00872*100 # low
