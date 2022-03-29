@@ -32,25 +32,25 @@ pwr.2p2n.test(n1=515, n2=41, sig.level = 0.05, power = 0.8)
 
 #### distribution of cataract scores ####
 
-# histogram of each cataract type
-cathist <- data.eye %>%
-  # making the data longer so I can plot a histogram of the distribution of each kind of cataract
-  pivot_longer(mean.nucop:mean.ps, 
-               names_to = "cattype",
-               values_to = "score") %>%
-  mutate(cattype = case_when(cattype == "mean.cor" ~ "Cortical",
-                             cattype == "mean.nucop" ~ "Nuclear",
-                             cattype == "mean.ps" ~ "Subcapsular"),
-         hline = case_when(cattype == "Cortical" ~ 1,
-                           cattype == "Nuclear" ~ 2,
-                           cattype == "Subcapsular" ~ 1)) %>%
-  ggplot(data=., aes(x = score)) +  # fill = cattype
-  geom_histogram() + 
-  facet_grid(.~cattype) + 
-  theme_bw() + 
-  geom_vline(aes(xintercept = hline), linetype = 3) +
-  labs(y = "Eyes (N)", x = "Cataract severity score") # fill = "Cataract type"
-cathist
+# # histogram of each cataract type
+# cathist <- data.eye %>%
+#   # making the data longer so I can plot a histogram of the distribution of each kind of cataract
+#   pivot_longer(mean.nucop:mean.ps, 
+#                names_to = "cattype",
+#                values_to = "score") %>%
+#   mutate(cattype = case_when(cattype == "mean.cor" ~ "Cortical",
+#                              cattype == "mean.nucop" ~ "Nuclear",
+#                              cattype == "mean.ps" ~ "Subcapsular"),
+#          hline = case_when(cattype == "Cortical" ~ 1,
+#                            cattype == "Nuclear" ~ 2,
+#                            cattype == "Subcapsular" ~ 1)) %>%
+#   ggplot(data=., aes(x = score)) +  # fill = cattype
+#   geom_histogram() + 
+#   facet_grid(.~cattype) + 
+#   theme_bw() + 
+#   geom_vline(aes(xintercept = hline), linetype = 3) +
+#   labs(y = "Eyes (N)", x = "Cataract severity score") # fill = "Cataract type"
+# cathist
 
 # ggsave(here("figures", "catdist", "catdist_histogram.eps"), cathist,
 #          device = cairo_ps)
@@ -108,7 +108,7 @@ table1.bl <- data %>%
   summarise(total=sum(!is.na(age_house)),
             n_age_35.39=sum(agecat=="35-39"), p_age_35.39=p(n_age_35.39, total),
             n_age_40.44=sum(agecat=="40-44"), p_age_40.44=p(n_age_40.44, total),
-            n_age_45.49=sum(agecat=="45-49"), p_age_45.49=p(n_age_45.49, total),
+            n_age_45.49=sum(agecat=="45-49"), p_age_45.49=p(n_age_45.49, total), # consider changing to include 50
             n_age_50plus=sum(agecat=="50+"), p_age_50plus=p(n_age_50plus, total),
             n_sex_Male=sum(sex1=="Male"), p_sex_Male=p(n_sex_Male,total),
             n_sex_Female=sum(sex1=="Female"), p_sex_Female=p(n_sex_Female,total),
@@ -375,7 +375,7 @@ write_csv(table1.fueye, here("tables","table1","table1_fueye.csv"))
 
 # refraction and bcva in the worse and better eye, respectively
 
-#everyone
+# everyone
 data %>% 
   summarise(n=sum(!is.na(studyno)),
             n_20=sum(bcva.3f=="20/20"),
@@ -445,22 +445,20 @@ data.long <- data.eye %>%
 data.long
 
 # base model
-m.base <- gls(score ~ 0 + cattype,
-              weights = varIdent(form=~1|cattype),
-              correlation = corSymm(form=~1 | studyno),
+m.base <- gls(score ~ 0 + cattype, # model is parameterized so we get 3 intercepts for each cataract
+              weights = varIdent(form=~1|cattype), # models heteroskedasticity so each cat type can have its own residual variance
+              correlation = corSymm(form=~1 | studyno), # models unstructured correlation among 3 outcome residuals
               data = data.long)
 summary(m.base)
+anova(m.base)
 
 # modeling the univariable associations
-uni <- gls(score ~ 0 + cattype + cattype:map, # iterating through all variables here
+uni <- gls(score ~ 0 + cattype + cattype:sex1, # iterating through all variables here
                weights = varIdent(form=~1|cattype),
                correlation = corSymm(form=~1 | studyno),
-               data = filter(data.long, !is.na(map))) # iterating
+               data = filter(data.long, !is.na(sex1))) # iterating
 
-# essentially using this code below from UCLA IDRE
-# m <- gls(score ~ 0 + test + test:prog,
-#          weights = varIdent(form=~1|test),
-#          correlation=corSymm(form=~ 1 | id), data=hsb_long)
+# code and explanation from IDRE stats
 
 # estimates
 est <- summary(uni)$tTable %>% as.data.frame() %>%
@@ -495,7 +493,7 @@ uni.table <- full_join(est, ci) %>%
 uni.table
 
 # saving the csv 
-write_csv(uni.table, here("tables","table2","unimap.csv"))
+write_csv(uni.table, here("tables","table2","unisex.csv"))
 
 # omnibus p-value
 anova(uni)
@@ -504,81 +502,81 @@ anova(uni)
 # lmtest::lrtest(uni, m.base)
 
 #### table 3 -- confounders ####
-# unadjusted model
-m.unadj <- gls(score ~ 0 + cattype + cattype:fuel.f,
-              weights = varIdent(form=~1|cattype),
-              correlation = corSymm(form=~1 | studyno),
-              data = filter(data.long, !is.na(fuel.f)))
-
-est <- summary(m.unadj)$tTable %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  rename(p=`p-value`, est=Value) %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
-                        "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
-  select(rowname, est) %>%
-  mutate(est=round(est, digits = 3)) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-ci <- confint(m.unadj)[,1:2] %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
-                        "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
-  rename(low = '2.5 %', high = '97.5 %') %>%
-  mutate(low=round(low, digits = 3), 
-         high=round(high, digits=3)) %>%
-  unite(ci, low, high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-full_join(est, ci) %>%
-  unite(estci, est, ci, sep = " ") %>%
-  write_csv(., here("tables","table3","unadj.csv"))
-
-# iterating through confounders
-m.conf <- gls(score ~ 0 + cattype + cattype:fuel.f + cattype:sphere.2f,
-           weights = varIdent(form=~1|cattype),
-           correlation = corSymm(form=~1 | studyno),
-           data = filter(data.long, !is.na(fuel.f) & !is.na(sphere.2f)))
-
-est <- summary(m.conf)$tTable %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  rename(p=`p-value`, est=Value) %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
-                        "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
-  select(rowname, est) %>%
-  mutate(est=round(est, digits = 3)) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-ci <- confint(m.conf)[,1:2] %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
-                        "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
-  rename(low = '2.5 %', high = '97.5 %') %>%
-  mutate(low=round(low, digits = 3), 
-         high=round(high, digits=3)) %>%
-  unite(ci, low, high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-full_join(est, ci) %>%
-  unite(estci, est, ci, sep = " ") %>%
-  write_csv(., here("tables","table3","ref.csv"))
+# # unadjusted model
+# m.unadj <- gls(score ~ 0 + cattype + cattype:fuel.f,
+#               weights = varIdent(form=~1|cattype),
+#               correlation = corSymm(form=~1 | studyno),
+#               data = filter(data.long, !is.na(fuel.f)))
+# 
+# est <- summary(m.unadj)$tTable %>% as.data.frame() %>%
+#   rownames_to_column() %>%
+#   rename(p=`p-value`, est=Value) %>%
+#   filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
+#                         "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
+#                         "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
+#   select(rowname, est) %>%
+#   mutate(est=round(est, digits = 3)) %>%
+#   separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
+#   separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
+#   select(-trash, -.) %>%
+#   arrange(cattype)
+# 
+# ci <- confint(m.unadj)[,1:2] %>% as.data.frame() %>%
+#   rownames_to_column() %>%
+#   filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
+#                         "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
+#                         "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
+#   rename(low = '2.5 %', high = '97.5 %') %>%
+#   mutate(low=round(low, digits = 3), 
+#          high=round(high, digits=3)) %>%
+#   unite(ci, low, high, sep = " to ") %>%
+#   mutate(ci=paste0("(",ci,")")) %>%
+#   separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
+#   separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
+#   select(-trash, -.) %>%
+#   arrange(cattype)
+# 
+# full_join(est, ci) %>%
+#   unite(estci, est, ci, sep = " ") %>%
+#   write_csv(., here("tables","table3","unadj.csv"))
+# 
+# # iterating through confounders
+# m.conf <- gls(score ~ 0 + cattype + cattype:fuel.f + cattype:sphere.2f,
+#            weights = varIdent(form=~1|cattype),
+#            correlation = corSymm(form=~1 | studyno),
+#            data = filter(data.long, !is.na(fuel.f) & !is.na(sphere.2f)))
+# 
+# est <- summary(m.conf)$tTable %>% as.data.frame() %>%
+#   rownames_to_column() %>%
+#   rename(p=`p-value`, est=Value) %>%
+#   filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
+#                         "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
+#                         "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
+#   select(rowname, est) %>%
+#   mutate(est=round(est, digits = 3)) %>%
+#   separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
+#   separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
+#   select(-trash, -.) %>%
+#   arrange(cattype)
+# 
+# ci <- confint(m.conf)[,1:2] %>% as.data.frame() %>%
+#   rownames_to_column() %>%
+#   filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
+#                         "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fwood",
+#                         "cattypemean.nucop:fuel.fwood", "cattypemean.ps:fuel.fwood")) %>%
+#   rename(low = '2.5 %', high = '97.5 %') %>%
+#   mutate(low=round(low, digits = 3), 
+#          high=round(high, digits=3)) %>%
+#   unite(ci, low, high, sep = " to ") %>%
+#   mutate(ci=paste0("(",ci,")")) %>%
+#   separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
+#   separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
+#   select(-trash, -.) %>%
+#   arrange(cattype)
+# 
+# full_join(est, ci) %>%
+#   unite(estci, est, ci, sep = " ") %>%
+#   write_csv(., here("tables","table3","ref.csv"))
 
 #### table 4 -- final model ####
 # for now just adding all RFs in univariable analysis + a-priori RFs
@@ -586,13 +584,21 @@ full_join(est, ci) %>%
 m.final <- gls(score ~ 0 + cattype + cattype:fuel.f + cattype:age_house + cattype:sex1 + cattype:bcva.3f +
                  cattype:ses.f + cattype:educ.f + cattype:bmicat + cattype:kitchen.f + cattype:occu.f +
                  cattype:packall.f + cattype:potobac.f + cattype:uv_yrs.f + cattype:sphere.2f,
-               weights = varIdent(form=~1|cattype),
-               correlation = corSymm(form=~1 | studyno),
+               weights = varIdent(form=~1 | cattype),
+               correlation = corSymm(form=~1 | studyno), # this 
                data = filter(data.long, !is.na(fuel.f) & !is.na(ses.f) & !is.na(educ.f)
                              & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
                              & !is.na(potobac.f) & !is.na(uv_yrs.f) & !is.na(occu.f)))
 
-xtabs(data=data,~occu.f, addNA=T)
+# data is in long format, cat severity is in score. corSymm(form=~1 | studyno) allows correlation within the individual 
+# this gives the correlation between cataract types within one individual (given in "Correlation" section of summary)
+# assume that variance is identical or equal
+
+# Correlation: in summary gives correlation between estimated parameters -- freely estiamtes correlation between all cataract type
+# Residual standard error: 0.3551204 = variance of residuals
+# cattype has 6 levels
+
+summary(m.final)
 
 est <- summary(m.final)$tTable %>%
   as.data.frame() %>% rownames_to_column() %>%
@@ -623,110 +629,26 @@ full_join(est, ci) %>%
   write_csv(., here("tables","table4","finalmodel.csv"))
 
 # obtaining p-values via LRT comparing final model with and without variable of interest
-# mwithout <- gls(score ~ 0 + cattype + cattype:sex1 + cattype:fuel.f + # cattype:agecat +
-#                   cattype:ses.f + cattype:educ.f + cattype:bmicat + cattype:kitchen.f +
-#                   cattype:potobac.f + cattype:packall.f + cattype:uv_yrs.f + cattype:sphere.2f,
-#                 weights = varIdent(form=~1|cattype),
-#                 correlation = corSymm(form=~1 | studyno),
-#                 data = filter(data.long, !is.na(fuel.f) & !is.na(ses.f) & !is.na(educ.f)
-#                               & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
-#                               & !is.na(potobac.f) & !is.na(uv_yrs.f)))
-# 
-# # lrt
-# lmtest::lrtest(mwithout, m.final)
-# anova(mwithout, m.final)
-# anova(mwithout, m.final)
-anova(m.final) # can I use this? looks like the p-values correspond better with the 95%CIs
+mwithout <- gls(score ~ 0 + cattype + cattype:age_house + cattype:sex1 + cattype:bcva.3f + # cattype:fuel.f +
+                  cattype:ses.f + cattype:educ.f + cattype:bmicat + cattype:kitchen.f + cattype:occu.f +
+                  cattype:packall.f + cattype:potobac.f + cattype:uv_yrs.f + cattype:sphere.2f,
+                weights = varIdent(form=~1|cattype),
+                correlation = corSymm(form=~1 | studyno),
+                data = filter(data.long, !is.na(fuel.f) & !is.na(ses.f) & !is.na(educ.f)
+                              & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
+                              & !is.na(potobac.f) & !is.na(uv_yrs.f) & !is.na(occu.f)))
+
+# lrt 
+lmtest::lrtest(mwithout, m.final)
+
+# I think I can do the same with a manova
+anova(m.final) # use this for paper
+car::Anova(m.final) # do not use this
+# can also use 
 
 # sex1, agecat, ses.f, ses.of, educ.f, occu.f, bmicat, map.3f, kitchen.f,
 # fuel.f, packall.f, etoh3f, potobac.f, uv_yrs.f, eye, sphereeq.4f, 
 # mean.nucop, mean.cor, mean.ps
-
-#### final model stratified by sex ####
-
-# female
-m.finalf <- gls(score ~ 0 + cattype + cattype:fuel.f + cattype:agecat + cattype:bcva.3f +
-                  cattype:ses.f + cattype:educ.f + cattype:bmicat + cattype:kitchen.f + cattype:occu.f +
-                  cattype:packall.f + cattype:potobac.f + cattype:uv_yrs.f + cattype:sphere.2f,
-                weights = varIdent(form=~1|cattype),
-                correlation = corSymm(form=~1 | studyno),
-                data = filter(data.long, !is.na(fuel.f) & !is.na(ses.f) & !is.na(educ.f)
-                              & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
-                              & !is.na(potobac.f) & !is.na(uv_yrs.f) & !is.na(bcva.3f) & sex1 == "Female"))
-
-est.f <- summary(m.finalf)$tTable %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  rename(p=`p-value`, est=Value) %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fkerosene",
-                        "cattypemean.nucop:fuel.fkerosene", "cattypemean.ps:fuel.fkerosene")) %>%
-  select(rowname, est) %>%
-  mutate(est=round(est, digits = 3)) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-ci.f <- confint(m.finalf)[,1:2] %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fkerosene",
-                        "cattypemean.nucop:fuel.fkerosene", "cattypemean.ps:fuel.fkerosene")) %>%
-  rename(low = '2.5 %', high = '97.5 %') %>%
-  mutate(low=round(low, digits = 3), 
-         high=round(high, digits=3)) %>%
-  unite(ci, low, high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-full_join(est.f, ci.f) %>%
-  unite(estci, est, ci, sep = " ") %>%
-  write_csv(., here("tables","sex_stratified","finalmodelf.csv"))
-
-# male
-m.finalm <- gls(score ~ 0 + cattype + cattype:fuel.f + cattype:agecat + cattype:bcva.3f +
-                  cattype:ses.f + cattype:educ.f + cattype:bmicat + cattype:kitchen.f + cattype:occu.f +
-                  cattype:packall.f + cattype:potobac.f + cattype:uv_yrs.f + cattype:sphere.2f,
-                weights = varIdent(form=~1|cattype),
-                correlation = corSymm(form=~1 | studyno),
-                data = filter(data.long, !is.na(fuel.f) & !is.na(ses.f) & !is.na(educ.f)
-                              & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
-                              & !is.na(potobac.f) & !is.na(uv_yrs.f) & !is.na(occu.f) & sex1 == "Male"))
-
-est.m <- summary(m.finalm)$tTable %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  rename(p=`p-value`, est=Value) %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fkerosene",
-                        "cattypemean.nucop:fuel.fkerosene", "cattypemean.ps:fuel.fkerosene")) %>%
-  select(rowname, est) %>%
-  mutate(est=round(est, digits = 3)) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-ci.m <- confint(m.finalm)[,1:2] %>% as.data.frame() %>%
-  rownames_to_column() %>%
-  filter(rowname %in% c("cattypemean.cor:fuel.fpropane","cattypemean.nucop:fuel.fpropane",
-                        "cattypemean.ps:fuel.fpropane", "cattypemean.cor:fuel.fkerosene",
-                        "cattypemean.nucop:fuel.fkerosene", "cattypemean.ps:fuel.fkerosene")) %>%
-  rename(low = '2.5 %', high = '97.5 %') %>%
-  mutate(low=round(low, digits = 3), 
-         high=round(high, digits=3)) %>%
-  unite(ci, low, high, sep = " to ") %>%
-  mutate(ci=paste0("(",ci,")")) %>%
-  separate(rowname, into = c("cattype", "parameter"), sep = ":") %>%
-  separate(cattype, into = c("trash", "cattype", sep = ".")) %>%
-  select(-trash, -.) %>%
-  arrange(cattype)
-
-full_join(est.m, ci.m) %>%
-  unite(estci, est, ci, sep = " ") %>%
-  write_csv(., here("tables","sex_stratified","finalmodelm.csv"))
 
 #### sensitivity analyses using one eye per participant ####
 
@@ -749,7 +671,7 @@ broom::tidy(m.sens, conf.int=T) %>%
   write_csv(., here("tables", "mvsens", "mvsens.csv"))
   
 # omnibus p-values
-anova(m.sens)
+anova(m.sens) # I could repeat this with an LRT
 
 #### interaction with sex in final model ####
 
@@ -763,7 +685,7 @@ m.sexint <- gls(score ~ 0 + cattype + cattype:fuel.f * cattype:sex1 + cattype:ag
                              & !is.na(bmicat) & !is.na(kitchen.f) & !is.na(packall.f)
                              & !is.na(potobac.f) & !is.na(uv_yrs.f) & !is.na(occu.f)))
 
-# comparing with final model
+# coxmparing with final model
 m.final # Log-restricted-likelihood: -117.4783
 m.sexint # Log-restricted-likelihood: -123.2346
 

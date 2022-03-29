@@ -157,12 +157,12 @@ data <- read_csv(here("data","cataract_data.csv")) %>%
          exp.fuel.f=factor(exp.fuel.f, levels = c("Med","Low","High")), 
          # xtabs(data=data,~exp.fuel.f,addNA=T)
          exp.fuel.of=factor(exp.fuel.f, ordered = T, levels = c("Med","Low","High")),
-         fuel.f=factor(fuel.f, levels = c("wood","kerosene", "propane")),
+         fuel.f=factor(fuel.f, levels = c("propane","wood","kerosene")),
          # creating clean vs unclean fuel
          fuel.2f = factor(case_when(fuel.f %in% c("kerosene", "wood") ~ "unclean",
                                     fuel.f == "propane" ~ "clean",
                                     is.na(fuel.f) ~ NA_character_),
-                          levels = c("unclean", "clean")),
+                          levels = c("clean", "unclean")),
          # xtabs(data=data, ~fuel.f + fuel.2f, addNA=T)
          # age categories xtabs(data=data,~age_house,addNA=T)
          agecat=case_when(age_house<40~"35-39",
@@ -350,7 +350,7 @@ data <- read_csv(here("data","cataract_data.csv")) %>%
                              bcva.n %in% c(5, 6, 7, 8) ~ "wt20/20"),
          # xtabs(data=data, ~bcva.3f, addNA=T)
          # recoding sex1 as factor
-         sex1=factor(sex1, levels= c("Female","Male")),
+         sex1=factor(sex1, levels= c("Male","Female")),
          # selecting worse cataract severity and refractive error per person
          # xtabs(data=data,~nucop.od)
          nucop=case_when(mean_nucopod > mean_nucopos ~ mean_nucopod,

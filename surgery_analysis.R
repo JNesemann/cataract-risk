@@ -32,7 +32,7 @@ base <- survfit(Surv(censortimeou, cataract) ~ 1, data=data) #
 summary(base, times = 15*365.25) 
 
 # iterating through variables
-coxph(Surv(censortimeou, cataract)~map, data=data) %>% 
+coxph(Surv(censortimeou, cataract)~sex1, data=data) %>% 
   broom::tidy(., conf.int=T, exp=T) %>% 
   select(term, estimate, conf.low, conf.high) %>%
   mutate(estimate=round(estimate, digits = 1),
@@ -41,10 +41,10 @@ coxph(Surv(censortimeou, cataract)~map, data=data) %>%
   unite(ci, conf.low, conf.high, sep = " to ") %>%
   mutate(ci=paste0("(",ci,")")) %>%
   unite(estci, estimate, ci, sep = " ") %>%
-  write_csv(., here("tables", "table2", "coxmap.csv"))
+  write_csv(., here("tables", "table2", "coxsex.csv"))
   
 # p-value 
-coxph(Surv(censortimeou, cataract)~map, data=data)
+coxph(Surv(censortimeou, cataract)~sex1, data=data)
 
 # #### table 3 -- assessing for confounders ####
 # # base model
@@ -78,10 +78,10 @@ cox.final <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + # agecat
 class(data$uv_yrs.of)
 class(data$agecat.of)
 
-coxph(Surv(censortimeou, cataract) ~ fuel.f + agecat.of + sex1 + ses.f + occu.f +  kitchen.f + packall.f + 
-        potobac.f + uv_yrs + sphere.2f + bcva.3f, 
+coxph(Surv(censortimeou, cataract) ~ fuel.f + agecat + sex1 + ses.f + occu.f +  kitchen.f + packall.f + 
+        potobac.f + uv_yrs.of + sphere.2f + bcva.3f, 
       data = filter(data, !is.na(ses.f))) %>%
-  broom::tidy(., conf.int=T)
+  broom::tidy(., conf.int=T) # %>% view(.)
 
 # # JK try at orthogonal polynomial; first create the ordered factor
 # imputed.35.clean.jk <- imputed.35.clean %>%
@@ -126,7 +126,7 @@ broom::tidy(cox.final, conf.int=T, exp=T) %>%
   write_csv(., here("tables","table4", "coxfinal.csv"))
 
 # obtaining p-values through LRT
-cox.without <- coxph(Surv(censortimeou, cataract) ~ fuel.f + age_house + sex1 + ses.f + occu.f +  # 
+cox.without <- coxph(Surv(censortimeou, cataract) ~ age_house + sex1 + ses.f + occu.f +  # fuel.f +
                        kitchen.f + packall.f + potobac.f + uv_yrs.f + sphere.2f + bcva.3f, 
                      data = filter(data, !is.na(ses.f)))
 
